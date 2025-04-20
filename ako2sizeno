@@ -1,0 +1,142 @@
+-- Modified version: Removed FOV circle but kept aimbot functionality.
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- == CREDITS UI == --
+
+local creditsGui = Instance.new("ScreenGui")
+creditsGui.Name = "CreditsGUI"
+creditsGui.ResetOnSpawn = false
+creditsGui.IgnoreGuiInset = true
+creditsGui.Parent = PlayerGui
+
+local creditBox = Instance.new("Frame")
+creditBox.Size = UDim2.new(0, 400, 0, 60)
+creditBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+creditBox.AnchorPoint = Vector2.new(0.5, 0.5)
+creditBox.BackgroundColor3 = Color3.new(0, 0, 0)
+creditBox.BackgroundTransparency = 1
+creditBox.Parent = creditsGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 20)
+corner.Parent = creditBox
+
+local creditText = Instance.new("TextLabel")
+creditText.Size = UDim2.new(1, 0, 1, 0)
+creditText.BackgroundTransparency = 1
+creditText.Text = "Made by ako2sizeno"
+creditText.Font = Enum.Font.GothamBold
+creditText.TextScaled = true
+creditText.TextColor3 = Color3.new(1, 1, 1)
+creditText.TextStrokeTransparency = 1
+creditText.TextStrokeColor3 = Color3.new(1, 1, 1)
+creditText.TextTransparency = 1
+creditText.Parent = creditBox
+
+local function showCredits()
+	TweenService:Create(creditBox, TweenInfo.new(1), {BackgroundTransparency = 0.2}):Play()
+	TweenService:Create(creditText, TweenInfo.new(1), {
+		TextTransparency = 0,
+		TextStrokeTransparency = 0
+	}):Play()
+	task.wait(4)
+	TweenService:Create(creditBox, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+	TweenService:Create(creditText, TweenInfo.new(1), {
+		TextTransparency = 1,
+		TextStrokeTransparency = 1
+	}):Play()
+end
+
+showCredits()
+
+-- == AIMBOT (Without FOV Circle) == --
+
+local AimEnabled = false
+local Smoothness = 9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 -- 1 means instant, lower value = slower
+local AimbotMode = "Adjustable"
+local MaxFOV = 1000 -- Increase FOV for more freedom
+
+local function getESPBoxTopCenter(player)
+	local character = player.Character
+	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+
+	local parts = {}
+	for _, part in ipairs(character:GetChildren()) do
+		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+			table.insert(parts, part)
+		end
+	end
+
+	local top = nil
+	for _, part in ipairs(parts) do
+		if not top or part.Position.Y > top.Y then
+			top = part.Position
+		end
+	end
+
+	if not top then return nil end
+
+	local screenPos, onScreen = Camera:WorldToScreenPoint(top)
+	if not onScreen then return nil end
+
+	local unitRay = Camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+	return unitRay.Origin + unitRay.Direction * 1000
+end
+
+local function aimAtTarget()
+	local targetPos = nil
+	local shortest = MaxFOV
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			local target = getESPBoxTopCenter(player)
+			if target then
+				local screenPos, onScreen = Camera:WorldToScreenPoint(target)
+				if onScreen then
+					local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+					if dist < shortest then
+						shortest = dist
+						targetPos = target
+					end
+				end
+			end
+		end
+	end
+
+	if targetPos then
+		local camPos = Camera.CFrame.Position
+		local aimCFrame = CFrame.new(camPos, targetPos)
+		if Smoothness >= 1 then
+			Camera.CFrame = aimCFrame
+		else
+			Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, Smoothness)
+		end
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
+		AimEnabled = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		AimEnabled = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if AimEnabled then
+		aimAtTarget()
+	end
+end)
